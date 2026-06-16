@@ -80,6 +80,22 @@ def test_reporter_produces_final_report(gateway: ToolGateway) -> None:
     assert any(artifact.kind == "report" for artifact in state["artifacts"])
 
 
+def test_evidence_is_gathered_and_carried_into_report(gateway: ToolGateway) -> None:
+    state = run_workflow("eastern corridor", gateway=gateway)
+    assert state["evidence"]
+    report = state["final_report"]
+    assert report is not None
+    assert report.evidence == state["evidence"]
+
+
+def test_all_evidence_traces_to_workflow(gateway: ToolGateway) -> None:
+    state = run_workflow("corridor", gateway=gateway)
+    report = state["final_report"]
+    assert report is not None
+    # The report's trace_id matches the single workflow trace_id.
+    assert report.trace_id == state["root_task"].trace_id  # type: ignore[union-attr]
+
+
 def test_all_responses_completed(gateway: ToolGateway) -> None:
     state = run_workflow("corridor", gateway=gateway)
     assert all(response.status is TaskStatus.COMPLETED for response in state["responses"])

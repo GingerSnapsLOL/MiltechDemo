@@ -29,6 +29,20 @@ make lint type test       # quality gates
 Configuration comes from environment variables (prefix `MILTECH_`, see
 `.env.example`) via `core/config.py`.
 
+## End-to-end query
+
+```bash
+curl -s localhost:8000/api/v1/chat \
+  -H 'content-type: application/json' \
+  -d '{"query": "Summarize recent activity in the eastern corridor."}' | jq
+```
+
+`POST /api/v1/chat` runs the full multi-agent workflow and returns
+`{ "answer", "evidence", "agent_trace" }`. The path is
+`router → analyst → (MCP tools) → validator → reporter → IntelligenceReport`, with
+one `trace_id` spanning every agent interaction. See
+**[docs/architecture.md](docs/architecture.md)** and **[DEMO.md](DEMO.md)**.
+
 ## MCP server
 
 A real MCP server (`mcp_server/server.py`, built on the official `mcp` SDK's
@@ -65,8 +79,16 @@ validate `task_id` + `trace_id`) and lifecycle (`advance_task_status`).
 only through A2A models. State (`graph/state.py`) is a `TypedDict` with
 `operator.add` reducers. The analyst and validator retrieve real data through the
 injected `ToolGateway` (analyst: `search_documents` + `query_intel_db`; validator:
-`query_intel_db` corroboration) — they never call tools directly. The narrative
-synthesis is currently deterministic (no LLM yet).
+`query_intel_db` corroboration) — they never call tools directly. The analyst and
+reporter synthesize text through an injected `LLMProvider`.
+
+## LLM provider
+
+A pluggable, local-first `LLMProvider` (`services/llm.py`) with two
+implementations — `FakeLLMProvider` (deterministic, default) and `OllamaProvider`
+(local Ollama). Selected by `MILTECH_LLM_PROVIDER` and injected into the agents via
+the run config. `POST /api/v1/llm/test` probes the configured provider. See
+**[docs/llm.md](docs/llm.md)**.
 
 ## Testing
 

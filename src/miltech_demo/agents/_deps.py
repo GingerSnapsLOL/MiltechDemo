@@ -7,6 +7,7 @@ LangGraph run config (``configurable``).
 
 from langchain_core.runnables import RunnableConfig
 
+from miltech_demo.services.llm import LLMProvider
 from miltech_demo.services.tool_gateway import ToolGateway
 
 
@@ -17,3 +18,12 @@ def gateway_from_config(config: RunnableConfig) -> ToolGateway:
     if not isinstance(gateway, ToolGateway):
         raise RuntimeError("agent node requires a 'tool_gateway' in the run config")
     return gateway
+
+
+def llm_from_config(config: RunnableConfig) -> LLMProvider:
+    """Extract the injected LLMProvider from the run config (raises if absent)."""
+    configurable = config.get("configurable") or {}
+    llm = configurable.get("llm")
+    if not isinstance(llm, LLMProvider):
+        raise RuntimeError("agent node requires an 'llm' in the run config")
+    return llm

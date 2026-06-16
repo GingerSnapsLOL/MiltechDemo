@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Which ToolGateway implementation agents use: in-process or real MCP client.
     tool_gateway: Literal["memory", "mcp"] = "memory"
 
+    # Which LLM provider agents use. Default "fake" keeps the demo local-first
+    # and deterministic; "ollama" calls a local Ollama server.
+    llm_provider: Literal["fake", "ollama"] = "fake"
+    llm_temperature: float = 0.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="MILTECH_",

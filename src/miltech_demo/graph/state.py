@@ -13,6 +13,7 @@ from miltech_demo.schemas import (
     AgentMessage,
     AgentResponse,
     AgentTask,
+    Evidence,
     IntelligenceReport,
 )
 
@@ -26,6 +27,7 @@ class GraphState(TypedDict):
     messages: Annotated[list[AgentMessage], operator.add]
     artifacts: Annotated[list[AgentArtifact], operator.add]
     responses: Annotated[list[AgentResponse], operator.add]
+    evidence: Annotated[list[Evidence], operator.add]
     final_report: IntelligenceReport | None
     agent_trace: Annotated[list[str], operator.add]
 
@@ -38,6 +40,7 @@ class StateUpdate(TypedDict, total=False):
     messages: list[AgentMessage]
     artifacts: list[AgentArtifact]
     responses: list[AgentResponse]
+    evidence: list[Evidence]
     final_report: IntelligenceReport | None
     agent_trace: list[str]
 
@@ -51,6 +54,7 @@ def initial_state(query: str) -> GraphState:
         messages=[],
         artifacts=[],
         responses=[],
+        evidence=[],
         final_report=None,
         agent_trace=[],
     )

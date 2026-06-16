@@ -1,20 +1,23 @@
 """Analyst node: retrieves supporting data via the injected ToolGateway.
 
-The analyst depends only on the ``ToolGateway`` interface (provided through the
-run config); it never imports the document/intel services or the MCP client.
-Retrieval is real; the narrative synthesis is deterministic (no LLM yet).
+The analyst depends only on the ``ToolGateway`` and ``LLMProvider`` interfaces
+(provided through the run config); it never imports the document/intel services,
+the MCP client, or a model client. Retrieval is real (MCP tools); the narrative
+synthesis is produced by the injected LLM.
 """
 
 import structlog
 from langchain_core.runnables import RunnableConfig
 
-from miltech_demo.agents._deps import gateway_from_config
+from miltech_demo.agents._deps import gateway_from_config, llm_from_config
 from miltech_demo.graph.state import GraphState, StateUpdate
 from miltech_demo.schemas import (
     AgentArtifact,
     AgentMessage,
     AgentResponse,
     AgentTask,
+    Evidence,
+    LLMRequest,
     MessageRole,
     QueryIntelInput,
     SearchDocumentsInput,
@@ -32,12 +35,46 @@ def analyst_node(state: GraphState, config: RunnableConfig) -> StateUpdate:
         raise RuntimeError("analyst_node requires a root_task created by the router")
 
     gateway = gateway_from_config(config)
+    llm = llm_from_config(config)
     query = state["query"]
     advance_task_status(task, TaskStatus.RUNNING)
     task.assigned_agent = "analyst"
 
     docs = gateway.search_documents(SearchDocumentsInput(query=query, limit=3))
     intel = gateway.query_intel_db(QueryIntelInput(query=query, limit=5))
+
+    # Turn the MCP tool results into structured evidence for the report.
+    evidence = [
+        Evidence(
+            document_id=hit.id,
+            snippet=hit.snippet,
+            relevance_score=hit.score,
+            rationale=f"Document matched query '{query}'.",
+        )
+        for hit in docs.hits
+    ]
+    evidence += [
+        Evidence(
+            document_id=f"intel:{row.id}",
+            snippet=row.summary,
+            relevance_score=0.5,
+            rationale=f"Intel record ({row.region}/{row.category}).",
+        )
+        for row in intel.rows
+    ]
+
+    # Synthesize the analysis from the retrieved material via the injected LLM.
+    snippets = "; ".join(hit.snippet for hit in docs.hits) or "no documents"
+    intel_lines = "; ".join(row.summary for row in intel.rows) or "no intel"
+    analysis = llm.generate(
+        LLMRequest(
+            system="You are an intelligence analyst. Be concise.",
+            prompt=(
+                f"Query: {query}\nDocuments: {snippets}\nIntel: {intel_lines}\n"
+                "Write a short analysis."
+            ),
+        )
+    )
 
     message = AgentMessage(
         trace_id=task.trace_id,
@@ -54,11 +91,12 @@ def analyst_node(state: GraphState, config: RunnableConfig) -> StateUpdate:
         task_id=task.task_id,
         name="analysis",
         kind="analysis",
-        content=(
-            f"Analysis of '{query}': {docs.count} matching document(s) and "
-            f"{intel.count} intel record(s)."
-        ),
-        metadata={"document_hits": docs.count, "intel_rows": intel.count},
+        content=analysis.text,
+        metadata={
+            "document_hits": docs.count,
+            "intel_rows": intel.count,
+            "llm_model": analysis.model,
+        },
     )
     attach_artifact(task, artifact)
 
@@ -92,5 +130,6 @@ def analyst_node(state: GraphState, config: RunnableConfig) -> StateUpdate:
         messages=[message],
         artifacts=[artifact],
         responses=[response],
+        evidence=evidence,
         agent_trace=["analyst: retrieved evidence via tools -> validator"],
     )

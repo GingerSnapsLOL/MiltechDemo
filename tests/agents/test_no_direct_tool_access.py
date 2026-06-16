@@ -7,7 +7,15 @@ from pathlib import Path
 
 import miltech_demo.agents as agents_pkg
 
-_FORBIDDEN = ("DocumentService", "IntelDatabase", "mcp_gateway", "import mcp", "from mcp")
+_FORBIDDEN = (
+    "DocumentService",
+    "IntelDatabase",
+    "mcp_gateway",
+    "import mcp",
+    "from mcp",
+    "ollama",
+    "OllamaProvider",
+)
 _AGENT_FILES = ("router.py", "analyst.py", "validator.py", "reporter.py")
 
 

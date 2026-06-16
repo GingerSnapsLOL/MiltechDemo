@@ -20,6 +20,7 @@ from miltech_demo.agents.reporter import reporter_node
 from miltech_demo.agents.router import router_node
 from miltech_demo.agents.validator import validator_node
 from miltech_demo.graph.state import GraphState, initial_state
+from miltech_demo.services.llm import LLMProvider, get_llm_provider
 from miltech_demo.services.tool_gateway import ToolGateway, get_tool_gateway
 
 CompiledWorkflow = CompiledStateGraph[GraphState, Any, GraphState, GraphState]
@@ -42,14 +43,22 @@ def build_graph() -> CompiledWorkflow:
     return builder.compile()
 
 
-def run_workflow(query: str, gateway: ToolGateway | None = None) -> GraphState:
+def run_workflow(
+    query: str,
+    gateway: ToolGateway | None = None,
+    llm: LLMProvider | None = None,
+) -> GraphState:
     """Run the workflow for ``query`` and return the final graph state.
 
-    The ``ToolGateway`` is injected into the run config so the analyst and
-    validator can access tools. When omitted, the process-wide gateway is used.
+    The ``ToolGateway`` and ``LLMProvider`` are injected into the run config so the
+    agents can access tools and generate text. When omitted, the process-wide
+    defaults are used.
     """
     tool_gateway = gateway if gateway is not None else get_tool_gateway()
+    llm_provider = llm if llm is not None else get_llm_provider()
     graph = build_graph()
-    config: RunnableConfig = {"configurable": {"tool_gateway": tool_gateway}}
+    config: RunnableConfig = {
+        "configurable": {"tool_gateway": tool_gateway, "llm": llm_provider}
+    }
     result = graph.invoke(initial_state(query), config=config)
     return cast(GraphState, result)
