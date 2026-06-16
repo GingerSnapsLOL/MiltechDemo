@@ -11,6 +11,10 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Typed JSON metadata: values are JSON scalars rather than strings only.
+JsonScalar = str | int | float | bool | None
+JsonMetadata = dict[str, JsonScalar]
+
 
 def now_utc() -> datetime:
     """Return the current time as a timezone-aware UTC datetime."""
