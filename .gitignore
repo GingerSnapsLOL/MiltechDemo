@@ -71,5 +71,8 @@ Thumbs.db
 # Logs
 *.log
 
+# Local synthetic intel database
+*.db
+
 CLAUDE.md
 TASK.md

@@ -16,6 +16,16 @@ from miltech_demo.schemas.base import DomainModel, IdentifiedModel
 from miltech_demo.schemas.documents import Document, DocumentChunk
 from miltech_demo.schemas.enums import Classification
 from miltech_demo.schemas.evidence import Evidence
+from miltech_demo.schemas.mcp import (
+    DocumentHit,
+    GetDocumentInput,
+    GetDocumentResult,
+    IntelRecord,
+    QueryIntelInput,
+    QueryIntelResult,
+    SearchDocumentsInput,
+    SearchDocumentsResult,
+)
 from miltech_demo.schemas.report import IntelligenceReport
 
 __all__ = [
@@ -29,11 +39,19 @@ __all__ = [
     "Classification",
     "Document",
     "DocumentChunk",
+    "DocumentHit",
     "DomainModel",
     "Evidence",
+    "GetDocumentInput",
+    "GetDocumentResult",
     "IdentifiedModel",
+    "IntelRecord",
     "IntelligenceReport",
     "MessageRole",
+    "QueryIntelInput",
+    "QueryIntelResult",
+    "SearchDocumentsInput",
+    "SearchDocumentsResult",
     "TaskStatus",
     "can_transition",
 ]

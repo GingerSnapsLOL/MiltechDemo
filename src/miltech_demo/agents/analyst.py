@@ -1,11 +1,14 @@
-"""Analyst node: consumes the analyst task and produces the analysis artifact.
+"""Analyst node: retrieves supporting data via the injected ToolGateway.
 
-Deterministic placeholder logic (no LLM yet); a model-backed service can be
-injected here in a later phase.
+The analyst depends only on the ``ToolGateway`` interface (provided through the
+run config); it never imports the document/intel services or the MCP client.
+Retrieval is real; the narrative synthesis is deterministic (no LLM yet).
 """
 
 import structlog
+from langchain_core.runnables import RunnableConfig
 
+from miltech_demo.agents._deps import gateway_from_config
 from miltech_demo.graph.state import GraphState, StateUpdate
 from miltech_demo.schemas import (
     AgentArtifact,
@@ -13,6 +16,8 @@ from miltech_demo.schemas import (
     AgentResponse,
     AgentTask,
     MessageRole,
+    QueryIntelInput,
+    SearchDocumentsInput,
     TaskStatus,
 )
 from miltech_demo.services import advance_task_status, attach_artifact, attach_message
@@ -20,15 +25,19 @@ from miltech_demo.services import advance_task_status, attach_artifact, attach_m
 logger = structlog.get_logger(__name__)
 
 
-def analyst_node(state: GraphState) -> StateUpdate:
-    """Analyze the query, emit message + artifact + response, route to validator."""
+def analyst_node(state: GraphState, config: RunnableConfig) -> StateUpdate:
+    """Retrieve documents + intel via the gateway, then emit message/artifact/response."""
     task = state["root_task"]
     if task is None:
         raise RuntimeError("analyst_node requires a root_task created by the router")
 
+    gateway = gateway_from_config(config)
     query = state["query"]
     advance_task_status(task, TaskStatus.RUNNING)
     task.assigned_agent = "analyst"
+
+    docs = gateway.search_documents(SearchDocumentsInput(query=query, limit=3))
+    intel = gateway.query_intel_db(QueryIntelInput(query=query, limit=5))
 
     message = AgentMessage(
         trace_id=task.trace_id,
@@ -36,7 +45,7 @@ def analyst_node(state: GraphState) -> StateUpdate:
         sender_agent="analyst",
         target_agent="validator",
         role=MessageRole.AGENT,
-        content=f"Analyzed query: {query}",
+        content=f"Analyzed '{query}': {docs.count} document hit(s), {intel.count} intel record(s).",
     )
     attach_message(task, message)
 
@@ -45,8 +54,11 @@ def analyst_node(state: GraphState) -> StateUpdate:
         task_id=task.task_id,
         name="analysis",
         kind="analysis",
-        content=f"Analysis of '{query}': identified key entities and notable activity.",
-        metadata={"query": query, "agent": "analyst"},
+        content=(
+            f"Analysis of '{query}': {docs.count} matching document(s) and "
+            f"{intel.count} intel record(s)."
+        ),
+        metadata={"document_hits": docs.count, "intel_rows": intel.count},
     )
     attach_artifact(task, artifact)
 
@@ -68,11 +80,17 @@ def analyst_node(state: GraphState) -> StateUpdate:
         target_agent="validator",
     )
 
-    logger.info("analyst_completed", trace_id=task.trace_id, task_id=task.task_id)
+    logger.info(
+        "analyst_completed",
+        trace_id=task.trace_id,
+        task_id=task.task_id,
+        document_hits=docs.count,
+        intel_rows=intel.count,
+    )
     return StateUpdate(
         tasks=[validator_task],
         messages=[message],
         artifacts=[artifact],
         responses=[response],
-        agent_trace=["analyst: produced analysis -> validator"],
+        agent_trace=["analyst: retrieved evidence via tools -> validator"],
     )

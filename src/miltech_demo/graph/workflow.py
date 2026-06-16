@@ -11,6 +11,7 @@ Flow: ``router -> analyst -> validator -> reporter``.
 
 from typing import Any, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -19,6 +20,7 @@ from miltech_demo.agents.reporter import reporter_node
 from miltech_demo.agents.router import router_node
 from miltech_demo.agents.validator import validator_node
 from miltech_demo.graph.state import GraphState, initial_state
+from miltech_demo.services.tool_gateway import ToolGateway, get_tool_gateway
 
 CompiledWorkflow = CompiledStateGraph[GraphState, Any, GraphState, GraphState]
 
@@ -40,8 +42,14 @@ def build_graph() -> CompiledWorkflow:
     return builder.compile()
 
 
-def run_workflow(query: str) -> GraphState:
-    """Run the workflow for ``query`` and return the final graph state."""
+def run_workflow(query: str, gateway: ToolGateway | None = None) -> GraphState:
+    """Run the workflow for ``query`` and return the final graph state.
+
+    The ``ToolGateway`` is injected into the run config so the analyst and
+    validator can access tools. When omitted, the process-wide gateway is used.
+    """
+    tool_gateway = gateway if gateway is not None else get_tool_gateway()
     graph = build_graph()
-    result = graph.invoke(initial_state(query))
+    config: RunnableConfig = {"configurable": {"tool_gateway": tool_gateway}}
+    result = graph.invoke(initial_state(query), config=config)
     return cast(GraphState, result)
