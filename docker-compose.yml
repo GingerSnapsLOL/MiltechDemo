@@ -11,6 +11,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot: pulls the model into the ollama volume, then exits. The app waits
+  # for this to complete so it never starts against an empty model store.
+  ollama-init:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: ${MILTECH_MODEL_NAME:-qwen2.5:7b-instruct}
+    entrypoint: ["/bin/sh", "-c", "ollama pull \"$${MODEL}\""]
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+
   app:
     build: .
     ports:
@@ -18,9 +31,12 @@ services:
     environment:
       MILTECH_ENVIRONMENT: docker
       MILTECH_OLLAMA_BASE_URL: http://ollama:11434
+      MILTECH_MODEL_NAME: ${MILTECH_MODEL_NAME:-qwen2.5:7b-instruct}
     depends_on:
       ollama:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
 
 volumes:
   ollama:

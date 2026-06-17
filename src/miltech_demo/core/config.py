@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Which LLM provider agents use. Default "fake" keeps the demo local-first
     # and deterministic; "ollama" calls a local Ollama server.
-    llm_provider: Literal["fake", "ollama"] = "fake"
+    llm_provider: Literal["fake", "ollama"] = "ollama"
     llm_temperature: float = 0.0
 
     model_config = SettingsConfigDict(

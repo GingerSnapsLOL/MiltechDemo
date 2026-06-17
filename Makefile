@@ -1,4 +1,9 @@
-.PHONY: install run mcp-server lint format type test check docker-build docker-run
+.PHONY: install run mcp-server lint format type test check docker-build docker-run pull-model
+
+# Single source of truth for the model name is .env (MILTECH_MODEL_NAME).
+# Override per-invocation with `make pull-model MODEL=...`.
+-include .env
+MODEL ?= $(or $(MILTECH_MODEL_NAME),qwen2.5:7b-instruct)
 
 install:
 	uv sync
@@ -27,4 +32,7 @@ docker-build:
 	docker build -t miltech-demo .
 
 docker-run:
-	docker run --rm -p 8000:8000 --env-file .env miltech-demo
+	docker run --rm -p 8000:8000 --env-file .env.example miltech-demo
+
+pull-model:
+	docker compose exec ollama ollama pull $(MODEL)
