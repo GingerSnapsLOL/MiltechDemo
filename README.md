@@ -11,8 +11,9 @@ feature count.
 > - This implements an **A2A-*style*** protocol inspired by agent-to-agent
 >   concepts. It is **not** official Google A2A compliance — no A2A SDK, no
 >   JSON-RPC transport, no spec agent-card discovery.
-> - The default LLM is a deterministic **fake** provider, so the whole system runs
->   offline and tests are reproducible. A real local model (Ollama) is opt-in.
+> - The default LLM provider is a **local Ollama model**. A deterministic **fake**
+>   provider (`MILTECH_LLM_PROVIDER=fake`) is opt-in for fully offline runs; the test
+>   suite always uses it, so tests stay reproducible without a model server.
 > - Retrieval is real (MCP tools over synthetic data); the narrative *wording* is
 >   model-generated. The data is synthetic and illustrative.
 
@@ -236,18 +237,25 @@ Configuration is environment-driven (prefix `MILTECH_`, see `.env.example`):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MILTECH_LLM_PROVIDER` | `fake` | `fake` (deterministic, offline) or `ollama` |
+| `MILTECH_LLM_PROVIDER` | `ollama` | `ollama` (local model) or `fake` (deterministic, offline) |
 | `MILTECH_TOOL_GATEWAY` | `memory` | `memory` (in-process) or `mcp` (real MCP client) |
 | `MILTECH_MODEL_NAME` | `qwen2.5:7b-instruct` | Ollama model |
 | `MILTECH_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
 | `MILTECH_INTEL_DB_PATH` | `intel.db` | synthetic SQLite DB path |
 | `MILTECH_LOG_LEVEL` | `INFO` | structlog level |
 
-Use a real local model (optional):
+The default provider is `ollama`, so `make run` expects a reachable Ollama server
+with the model pulled:
 
 ```bash
-ollama serve && ollama pull qwen2.5:7b-instruct
-export MILTECH_LLM_PROVIDER=ollama
+ollama serve && ollama pull qwen2.5:7b-instruct   # or: make pull-model (Docker)
+make run
+```
+
+To run fully offline with no model server, opt into the deterministic fake provider:
+
+```bash
+export MILTECH_LLM_PROVIDER=fake
 make run
 ```
 
@@ -267,8 +275,11 @@ docker compose up --build             # app (:8000) + ollama (:11434)
 ```
 
 The image runs as a non-root user and includes a `HEALTHCHECK` hitting `/health`.
-`docker-compose.yml` wires `MILTECH_OLLAMA_BASE_URL=http://ollama:11434` and waits
-for Ollama to be healthy before starting the app.
+`docker-compose.yml` wires `MILTECH_OLLAMA_BASE_URL=http://ollama:11434`, then a
+one-shot `ollama-init` service **pulls the model** (`MILTECH_MODEL_NAME`, sourced
+from `.env`) once Ollama is healthy; the app waits for that pull to complete before
+starting, so it never comes up against an empty model store. To (re)pull into a
+running stack: `make pull-model` (optionally `MODEL=...`).
 
 ---
 
@@ -315,7 +326,7 @@ curl -s localhost:8000/api/v1/chat \
 curl -s localhost:8000/api/v1/llm/test \
   -H 'content-type: application/json' \
   -d '{"prompt": "Say hello in one word."}' | jq
-# { "text": "...", "model": "fake-llm" }   (or the Ollama model)
+# { "text": "...", "model": "qwen2.5:7b-instruct" }   (or "fake-llm" with the fake provider)
 ```
 
 Interactive OpenAPI docs are at `http://localhost:8000/docs`.
@@ -341,8 +352,9 @@ The suite (~100 tests; `pytest`) covers, mirroring the package layout:
   a temp-DB gateway + fake LLM).
 - **Guard** — agents never import concrete tools/model clients.
 
-Everything is deterministic and offline by default (fake LLM + in-memory gateway),
-so tests are reproducible without a model server.
+The test suite pins the fake LLM + in-memory gateway, so tests are deterministic,
+offline, and reproducible without a model server — regardless of the app's
+configured provider.
 
 ---
 
